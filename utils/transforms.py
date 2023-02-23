@@ -70,7 +70,7 @@ from math import sin, cos
 
 class LinearDeform():
     """input/output pytorch 5D tensor (N, C, D, H, W)"""
-    def __init__(self, scale=(0.8, 1.2), angle=(-20, 20), shear=(-0.015, 0.015), trans=(-0.3, 0.3), verbose=False):
+    def __init__(self, scale=(0.8, 1.2), angle=(-20, 20), shear=(-0.015, 0.015), trans=(-30, 30), verbose=False):
         self.scale = scale
         self.angle = angle
         self.shear = shear
@@ -78,6 +78,7 @@ class LinearDeform():
         self.verbose = verbose
     
     def __call__(self, label):
+        max_dim_length = max(label.shape)
         pd = ( max(label.shape) - label.shape[-3] )
         ph = ( max(label.shape) - label.shape[-2] )
         pw = ( max(label.shape) - label.shape[-1] )
@@ -140,7 +141,7 @@ class LinearDeform():
             print(shearZ)
             print(affine, affine.dtype)
         
-        return new_label[..., pd//2:-(pd - pd//2), ph//2:256-(ph - ph//2), pw//2:256-(pw - pw//2)]
+        return new_label[..., pd//2:max_dim_length-(pd - pd//2), ph//2:max_dim_length-(ph - ph//2), pw//2:max_dim_length-(pw - pw//2)]
 
 
 class GMMSample():
@@ -183,7 +184,7 @@ class Rescale():
 
 
 class GammaTransform():
-    def __init__(self, std=0.632):
+    def __init__(self, std=0.04):
         self.std = std
 
     def __call__(self, image):
@@ -198,7 +199,7 @@ def get_gauss(sigma, kernel_size = 3):
     x = torch.linspace(-center, center, kernel_size)
     y = torch.linspace(-center, center, kernel_size)
     z = torch.linspace(-center, center, kernel_size)
-    xx, yy, zz = torch.meshgrid(x, y, z)
+    xx, yy, zz = torch.meshgrid(x, y, z, indexing="ij")
 
     # Calculate the Gaussian function
     gaussian = torch.exp(-(xx**2 + yy**2 + zz**2) / (2 * sigma**2))
@@ -209,26 +210,22 @@ def get_gauss(sigma, kernel_size = 3):
     return gaussian
 
 class RandomDownsample():
-    def __init__(self):
-        pass
+    def __init__(self, max_slice_spcae=9):
+        self.max_slice_space = max_slice_spcae
         
-    def __call__(img):
-        r_spac = random.uniform(1, 9)
+    def __call__(self, image):
+        r_spac = random.uniform(1, self.max_slice_space)
         r_thick = random.uniform(1, r_spac)
         a = random.uniform(0.95, 1.05)
         std_thick = (2 * a * math.log(10) * r_thick) / (2 * math.pi * 1)
         
-        origin_shape = img.size()
-        sample_shape = (torch.tensor(img.size()) / r_spac).int()
+        origin_shape = image.size()[-3:]
+        sample_shape = (torch.tensor(image.size()[-3:]) / r_spac).int()
         sample_shape = torch.Size(sample_shape.tolist())
         
-        gauss_kernel = get_gauss(sigma=std_thick).to(img.device)
-        img = F.conv3d(img[None, None, ...], weight=gauss_kernel[None, None, ...], padding=1)
+        gauss_kernel = get_gauss(sigma=std_thick).to(image.device)
+        image = F.conv3d(image, weight=gauss_kernel[None, None, ...], padding=1) # Guassian Blur
         
-        # downsample to low resolution r_spac
-        img = F.interpolate(input=img,  size=sample_shape, mode='trilinear')
-        # upsample back to r_hr
-        img = F.interpolate(input=img, size=origin_shape, mode='trilinear')
-        img = img[0, 0, ...]
-        
-        return img
+        image = F.interpolate(input=image,  size=sample_shape, mode='trilinear') # downsample to low resolution r_spac
+        image = F.interpolate(input=image, size=origin_shape, mode='trilinear') # upsample back to r_hr
+        return image
