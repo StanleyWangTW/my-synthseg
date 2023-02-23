@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 
 def show_slices(image, layer, cmap):
+    image = image.cpu()
     plt.figure(figsize=(10, 10))
 
     plt.subplot(131)
