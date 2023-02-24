@@ -1,6 +1,27 @@
 import torch
 from torch import nn
 
+
+def save_checkpoint(epoch, model, optimizer, loss, dice, path="checkpoint.tar"):
+    torch.save({'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'loss': loss,
+                'dice': dice}, path)
+    print("=> save checkpoint")
+
+def load_checkpoint(epoch, model, optimizer, loss, dice, path="checkpoint.tar"):
+    checkpoint = torch.load(path)
+    epoch = checkpoint['epoch']
+    model.load_state_dict(checkpoint['model_state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    loss = checkpoint['loss']
+    dice = checkpoint['dice']
+    print("<= load checkpoint")
+    
+    return epoch, loss, dice
+
+
 class DoubleConv(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(DoubleConv, self).__init__()
