@@ -225,7 +225,7 @@ class Rescale():
 
 
 class GammaTransform():
-    def __init__(self, std=0.4):
+    def __init__(self, std=0.6324):
         self.std = std
 
     def __call__(self, image):
