@@ -92,8 +92,8 @@ class LinearDeform():
         ]) ) # scale matrix
 
         angleX = math.radians(random.uniform(self.degrees[0], self.degrees[1]))
-        angleY = math.radians(random.uniform(self.degrees[2], self.degrees[4]))
-        angleZ = math.radians(random.uniform(self.degrees[3], self.degrees[5]))
+        angleY = math.radians(random.uniform(self.degrees[2], self.degrees[3]))
+        angleZ = math.radians(random.uniform(self.degrees[4], self.degrees[5]))
         
         
         from math import sin, cos
@@ -250,8 +250,8 @@ def get_gauss(sigma, kernel_size = 3):
     
     return gaussian
 
-class RandomDownsample():
-    def __init__(self, r_hr, max_slice_space=9, alpha=(0.95, 1.05)):
+class RandomDownSample():
+    def __init__(self, max_slice_space=9, alpha=(0.95, 1.05), r_hr=1,):
         self.r_hr = r_hr
         self.max_slice_space = max_slice_space
         self.alpha = alpha
