@@ -14,6 +14,17 @@ class Compose():
             output = transfom(output)
         
         return output
+    
+
+def split_labels(label, index_all):
+    """input torch 5D tensor (N, C, D, H, W)"""
+    new_label = torch.empty((label.shape[0], len(index_all),) + label.shape[-3:]).to(label.device)
+
+    for j, idx in enumerate(index_all):
+        new_label[0, j, ...] = torch.where(label==idx, 1., 0.)
+        
+    return new_label
+
 
 # Training Augmentations
 class RandomSkullStrip():
