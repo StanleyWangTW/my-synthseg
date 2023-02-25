@@ -14,10 +14,12 @@ class FocalLoss():
 
 
 def dice(pred, target, smooth=1e-5):
-    pred = pred.flatten()
-    target = target.flatten()
-    intersection = (pred * target).sum()
-    return (2 * intersection + smooth) / (pred.sum() + target.sum() + smooth)
+    pred = pred.flatten(start_dim=-3)
+    target = target.flatten(start_dim=-3)
+
+    intersection = (pred * target).sum(dim=-1)
+
+    return ( (2 * intersection + smooth) / (pred.sum(dim=-1) + target.sum(dim=-1) + smooth) ).mean()
 
 
 class DiceLoss():
