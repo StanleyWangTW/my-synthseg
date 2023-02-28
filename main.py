@@ -80,7 +80,7 @@ image_transform = transforms.Compose([
     transforms.GMMSample(mean=(0, 255), std=(0, 35)),
     transforms.RandomBiasField(max_std=0.6),
     transforms.Rescale(),
-    transforms.GammaTransform(std=0.6324),
+    transforms.GammaTransform(std=0.4),
     transforms.RandomDownSample(max_slice_space=9, alpha=(0.95, 1.05), r_hr=1)
 ])
 
@@ -89,25 +89,41 @@ dataset = MRIData(r"nifti_files\samseg.nii.gz")
 label = nib.load(r"nifti_files\samseg.nii.gz").get_fdata()
 label = torch.from_numpy(label).float().to(device)
 
+learning_rate = 1e-4
+model = models.Unet3D(1, len(index_all), 24).to(device)
+optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+loss_fn = losses.DiceLoss()
+
 if not os.path.exists("saves"):
     os.makedirs("saves")
 bestmodel_path = r"saves\bestmodel.pth"
 checkpoint_path = r"saves\checkpoint.pth.tar"
-model = models.Unet3D(1, len(index_all), 24).to(device)
-loss_fn = losses.DiceLoss()
-learning_rate = 1e-4
-optimizer = optim.Adam(model.parameters(), lr=1e-4)
 
-dice_list = []
-loss_list = []
-best_score = -1
-steps = 356 * 10
-savestep = 356
+if input("Load checkpoint ? [y/n]") == "y" and os.path.exists(checkpoint_path):
+    checkpoint = torch.load(checkpoint_path)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    start_step = checkpoint['step']
+    loss_list = checkpoint['loss']
+    dice_list = checkpoint['dice']
+    best_score = checkpoint['best_score']
+else:
+    start_step = 0
+    dice_list = []
+    loss_list = []
+    best_score = -1
+
+
+
+print(start_step)
+savestep = 3
+steps = 10 * savestep
 print(f"Number of Steps: {steps}, Learning Rate: {learning_rate}")
 print(f"Optimizer: {optimizer}")
 print(f"Loss Function: {loss_fn}")
 print("Start Training...\n")
 torch.cuda.empty_cache()
+model.train()
 idx = 0
 for i in range(steps//savestep):
     for j in tqdm(range(savestep)):
@@ -116,7 +132,7 @@ for i in range(steps//savestep):
         mask = transforms.split_labels(mask, index_all)
 
         pred = model(image)
-        loss = loss_fn(pred, mask)
+        loss = loss_fn(pred, mask) # soft dice
 
         optimizer.zero_grad()
         loss.backward()
@@ -126,11 +142,11 @@ for i in range(steps//savestep):
         idx = idx if idx < len(dataset) else 0
 
     with torch.no_grad():
-        step = (i+1) * savestep
-        pred[pred > 0.5] = 1
+        step = (i+1) * savestep + start_step
+        pred[pred > 0.5]  = 1 # pull to the closest value
         pred[pred <= 0.5] = 0
-        dice_score = losses.dice(pred, mask).item()
-        print(f"[{step}/{steps}] Dice: {dice_score}, Loss: {loss.item()}")
+        dice_score = losses.dice(pred, mask).item() # hard dice
+        print(f"[{step}/{steps + start_step}] Dice: {dice_score}, Loss: {loss.item()}")
         if best_score == -1 or dice_score > best_score:
             best_score = dice_score
             torch.save(model, bestmodel_path)
@@ -138,4 +154,14 @@ for i in range(steps//savestep):
         
         loss_list.append(loss.item())
         dice_list.append(dice_score)
-        models.save_checkpoint(step, model, optimizer, loss_list, dice_list, checkpoint_path)
+
+        # save checkpoint
+        torch.save({
+            'step': step,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'loss': loss_list,
+            'dice': dice_list,
+            'best_score': best_score
+        }, checkpoint_path)
+        print("=> save checkpoint")
