@@ -84,11 +84,7 @@ image_transform = transforms.Compose([
     transforms.RandomDownSample(max_slice_space=9, alpha=(0.95, 1.05), r_hr=1)
 ])
 
-dataset = MRIData(r"nifti_files\samseg.nii.gz")
-
-label = nib.load(r"nifti_files\samseg.nii.gz").get_fdata()
-label = torch.from_numpy(label).float().to(device)
-
+dataset = MRIData(r"nifti_files\label\*.nii.gz")
 learning_rate = 1e-4
 model = models.Unet3D(1, len(index_all), 24).to(device)
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
@@ -116,8 +112,8 @@ else:
 
 
 print(start_step)
-savestep = 3
-steps = 10 * savestep
+savestep = 500
+steps =  50 * savestep
 print(f"Number of Steps: {steps}, Learning Rate: {learning_rate}")
 print(f"Optimizer: {optimizer}")
 print(f"Loss Function: {loss_fn}")
