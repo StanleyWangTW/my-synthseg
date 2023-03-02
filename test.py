@@ -3,15 +3,15 @@ from torch.utils.data import Dataset
 import numpy as np
 import nibabel as nib
 import matplotlib.pyplot as plt
-from glob import glob
 
+import os
+from glob import glob
 import argparse
 
 from utils.plot_image import show_slices, show_labels
 from utils import models, losses
 from utils import transforms
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
 index_all = [2,  3,   4,   5,   7,   8,   10,  11,  12,  13,  14,  15,  16,  17,
             18,  26,  28,  31,  41,  42,  43,  44,  46,  47,  49,  50,
             51, 52,  53,  54,  58,  60,  63,  77]
@@ -55,65 +55,67 @@ label_dict = {
 
 class MRIData(Dataset):
     def __init__(self, dir: str):
-        self.paths = glob(dir)
+        self.image_paths = glob(os.path.join(dir, "images", "*"))
+        if len(self.image_paths) != len(glob(os.path.join(dir, "labels", "*"))):
+            raise Exception("Error: number of images and labels doesn't match")
 
     def __len__(self) -> int:
-        return len(self.paths)
+        return len(self.image_paths)
 
-    def __getitem__(self, index: int) -> torch.FloatTensor:
-        return torch.from_numpy(nib.load(self.paths[index]).get_fdata())[None, None, ...].float()
+    def __getitem__(self, index: int) -> list:
+        return [
+            torch.from_numpy(nib.load(self.image_paths[index]).get_fdata())[None, None, ...].float(),
+            torch.from_numpy(nib.load(self.image_paths[index].replace("images", "labels")).get_fdata())[None, None, ...].float()
+        ]
+    
+transform = transforms.Compose([
+    # transforms.RandomCrop(100),
+    transforms.Rescale()
+])
 
 def main():
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument("-I", "--input", nargs="input", type=str, help="input files")
-    # parser.add_argument("--model", nargs="model_path", type=str, help="model path")
-    # args = parser.parse_args()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("model", metavar="<model>", help="model path")
+    parser.add_argument("input", metavar="<input>", help="path of input folder")
+    parser.add_argument("--hard", action="store_true", help="calculate hard dice score")
+    parser.add_argument("-f", "--flip", action="store_true", help="enable flip augmentation in test time")
+    parser.add_argument("-g", "--use_gpu", action="store_true", help="enable gpu")
+    args = parser.parse_args()
 
-    # dataset = MRIData(args.input)
+    device = "cuda" if torch.cuda.is_available() and args.use_gpu else "cpu"
+    dataset = MRIData(args.input)
+    model = models.Unet3D(1, 34, 24)
+    model = torch.load(args.model).to(device)
+
+    image, label = dataset[0]
+
+    model.eval()
+    torch.cuda.empty_cache()
     with torch.no_grad():
+        image = image.to(device)
+        image = transform(image)
+        pred = model(image)
 
-        label_transform = transforms.Compose([
-            transforms.RandomSkullStrip(),
-            transforms.RandomLRFlip(),
-            transforms.LinearDeform(scales=(0.8, 1.2), degrees=(-20, 20), shears=(-0.015, 0.015), trans=(-30, 30)),
-            transforms.NonlinearDeform(max_std=4),
-            transforms.RandomCrop(120)
-        ])
-
-        image_transform = transforms.Compose([
-            transforms.GMMSample(mean=(0, 255), std=(0, 35)),
-            transforms.RandomBiasField(max_std=0.6),
-            transforms.Rescale(),
-            transforms.GammaTransform(std=0.4),
-            transforms.RandomDownSample(max_slice_space=9, alpha=(0.95, 1.05), r_hr=1)
-        ])
-
-        transform = transforms.Compose([
-            transforms.RandomCrop(120),
-            transforms.Rescale()
-        ])
-
-        # label1 = torch.from_numpy(nib.load(r"nifti_files\label\seg.nii.gz").get_fdata()).float().to(device)[None, None, ...] 
-        # label2 = torch.from_numpy(nib.load(r"nifti_files\label\samseg.nii.gz").get_fdata()).float().to(device)[None, None, ...] 
+        if args.flip:
+            torch.cuda.empty_cache()
+            flipped_image = image.flip(dims=(2,))
+            flipped_pred = model(flipped_image)
+            pred = (pred + flipped_pred.flip(dims=(2,))) / 2
         
-        # show_slices(label1[0, 0, ...], (100, 100, 100), "gist_ncar")
-        # show_slices(label2[0, 0, ...], (100, 100, 100), "gist_ncar")
+        if args.hard:
+            pred[pred >= 0.5] = 1
+            pred[pred < 0.5] = 0
+        
+        # show_labels(pred, 25, 9, 5, index_all, label_dict)
+        pred = pred.argmax(dim=1)
+        print(pred.unique(), len(pred.unique()), len(index_all))
+        for i, l in enumerate(index_all):
+            pred[pred == i+1] = l
 
-        # label = label_transform(label)
-        # show_labels(transforms.split_labels(label, index_all), 100, 9, 5, index_all, label_dict, True, "label3.jpg")
-        # gen_img = image_transform(label)
+        print(pred.unique())
+        show_slices(pred[0, ...], (110, 110, 110), "gist_ncar")
 
-        img = torch.from_numpy(nib.load(r"nifti_files\CC0001_philips_15_55_M.nii.gz").get_fdata()).float().to(device)[None, None, ...] 
-        img = transform(img)
-        show_slices(img[0, 0, ...], (60, 60, 60), "gray")
-
-        model = models.Unet3D(1, 34, 24)
-        model = torch.load(r"saves\bestmodel.pth").to(device)
-
-        pred = model(img)
-        pred[pred >= 0.5] = 1
-        pred[pred < 0.5] = 0
-        show_labels(pred, 60, 9, 5, index_all, label_dict, True, "pred2.jpg")
+        return
 
 
 main()
