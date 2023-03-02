@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-def show_slices(image, layer, cmap):
+def show_slices(image, layer, cmap, save=False, path=None):
     image = image.cpu()
     plt.figure(figsize=(10, 10))
 
@@ -20,10 +20,18 @@ def show_slices(image, layer, cmap):
     plt.xlabel(f"Layer: {layer[2]}")
     plt.imshow(np.rot90(image[:, :, layer[2]]), cmap=cmap)
 
+    plt.tight_layout()
+
+    if save:
+        if path is not None:
+            plt.savefig(path)
+        else:
+            print("Path doesn't exist")
+
     plt.show()
 
 
-def show_labels(label, layer, nrows, ncols, index_all, label_dict):
+def show_labels(label, layer, nrows, ncols, index_all, label_dict, save=False, path=None):
     """ label: 5D tensor label"""
     plt.figure(figsize=(15, 15))
     for i in range(label.shape[1]):
@@ -32,4 +40,11 @@ def show_labels(label, layer, nrows, ncols, index_all, label_dict):
         plt.imshow(np.rot90(label[0, i, :, :, layer].cpu()), cmap="gray")
     
     plt.tight_layout()
+    
+    if save:
+        if path is not None:
+            plt.savefig(path)
+        else:
+            print("Path doesn't exist")
+
     plt.show()
