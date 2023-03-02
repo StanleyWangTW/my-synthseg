@@ -92,19 +92,22 @@ def main():
     model.eval()
     torch.cuda.empty_cache()
     with torch.no_grad():
-        image = image.to(device)
+        image = nib.load(r"nifti_files\CC0007_philips_15_62_M.nii.gz")
+        affine = image.affine
+        image = torch.from_numpy(image.get_fdata())[None, None, ...].float()
         image = transform(image)
+        show_slices(image[0, 0, ...], (110, 110, 110), "gray")
         pred = model(image)
+        b = torch.ones((1, 1, pred.shape[-3], pred.shape[-2], pred.shape[-1])) * 0.5
+
+        pred = torch.nn.functional.pad(pred, pad=(0, 0, 0, 0, 0, 0, 1, 0), value=0.5)
+        print(pred.shape, pred[0, 0, ...].max())
 
         if args.flip:
             torch.cuda.empty_cache()
             flipped_image = image.flip(dims=(2,))
             flipped_pred = model(flipped_image)
             pred = (pred + flipped_pred.flip(dims=(2,))) / 2
-        
-        if args.hard:
-            pred[pred >= 0.5] = 1
-            pred[pred < 0.5] = 0
         
         # show_labels(pred, 25, 9, 5, index_all, label_dict)
         pred = pred.argmax(dim=1)
@@ -115,7 +118,13 @@ def main():
         print(pred.unique())
         show_slices(pred[0, ...], (110, 110, 110), "gist_ncar")
 
-        return
+        pred = pred[0, ...]
+        pred = nib.Nifti1Image(pred.detach().numpy(), affine=affine, dtype=np.int32)
+        pred.to_filename("output.nii.gz")
+
+        if args.hard:
+            pred[pred >= 0.5] = 1
+            pred[pred < 0.5] = 0
 
 
 main()
