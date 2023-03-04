@@ -31,12 +31,13 @@ def show_slices(image, layer, cmap, save=False, path=None):
     plt.show()
 
 
-def show_labels(label, layer, nrows, ncols, index_all, label_dict, save=False, path=None):
+def show_labels(label, layer, nrows, ncols, title, index_all=None, label_dict=None, save=False, path=None):
     """ label: 5D tensor label"""
     plt.figure(figsize=(15, 15))
     for i in range(label.shape[1]):
         plt.subplot(nrows, ncols, i+1)
-        plt.title(label_dict[index_all[i]])
+        if title:
+            plt.title(label_dict[index_all[i]])
         plt.imshow(np.rot90(label[0, i, :, :, layer].cpu()), cmap="gray")
     
     plt.tight_layout()
