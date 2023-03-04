@@ -32,7 +32,7 @@ class RandomSkullStrip():
         self.verbose = verbose
 
     def __call__(self, label):
-        skull_indexs = [30, 62, 85, 165, 258, 259]
+        skull_indexs = [85, 165, 258, 259]
     
         output = torch.clone(label)
         if random.choice((0, 1)):
